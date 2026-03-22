@@ -11,11 +11,14 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('route_series', function (Blueprint $table) {
+        Schema::create('meal_service_details', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('route_id')->constrained()->cascadeOnDelete();
-            $table->foreignId('series_id')->constrained()->cascadeOnDelete();
-            $table->boolean('is_active')->default(true);
+
+            $table->foreignId('meal_service_id')->constrained()->cascadeOnDelete();
+
+            $table->enum('type', ['crew', 'passenger']);
+            $table->integer('total_served');
+
             $table->timestamps();
         });
     }
@@ -25,6 +28,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('route_series');
+        Schema::dropIfExists('meal_service_details');
     }
 };

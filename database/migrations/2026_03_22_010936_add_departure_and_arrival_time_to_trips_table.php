@@ -9,14 +9,20 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('trips', function (Blueprint $table) {
-            $table->dropColumn('price');
+            $table->dateTime('departure_time')
+                ->nullable()
+                ->after('schedule_id');
+
+            $table->dateTime('arrival_time')
+                ->nullable()
+                ->after('departure_time');
         });
     }
 
     public function down(): void
     {
         Schema::table('trips', function (Blueprint $table) {
-            $table->decimal('price', 10, 2)->nullable();
+            $table->dropColumn(['departure_time', 'arrival_time']);
         });
     }
 };

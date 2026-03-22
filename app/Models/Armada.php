@@ -40,4 +40,9 @@ class Armada extends Model
             ? asset('storage/' . $this->image) 
             : null;
     }
+
+    public function seats()
+    {
+        return $this->hasMany(Seat::class);
+    }
 }

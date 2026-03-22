@@ -4,10 +4,16 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 use App\Http\Controllers\Api\AuthController;
-use App\Http\Controllers\Api\ArmadaController;
 use App\Http\Controllers\Api\RouteController;
 use App\Http\Controllers\Api\SeriesController;
+use App\Http\Controllers\Api\ScheduleController;
 use App\Http\Controllers\Api\TripController;
+use App\Http\Controllers\Api\UserController;
+use App\Http\Controllers\Api\CompanyController;
+use App\Http\Controllers\Api\RoleController;
+use App\Http\Controllers\Api\PublicTripController;
+use App\Http\Controllers\Api\ArmadaController;
+
 
 /*
 |--------------------------------------------------------------------------
@@ -19,42 +25,36 @@ Route::post('/login', [AuthController::class, 'login']);
 
 /*
 |--------------------------------------------------------------------------
-| PROTECTED ROUTES (LOGIN REQUIRED)
+| API Routes
 |--------------------------------------------------------------------------
 */
 
 Route::middleware('auth:sanctum')->group(function () {
 
-    /*
-    |--------------------------------------------------------------------------
-    | AUTH
-    |--------------------------------------------------------------------------
-    */
-    Route::get('/me', function (Request $request) {
-        return response()->json([
-            'success' => true,
-            'data' => $request->user()
-        ]);
+    // COMPANY (SUPER ADMIN)
+    Route::prefix('companies')->group(function () {
+        Route::get('/', [CompanyController::class, 'index']);
+        Route::post('/', [CompanyController::class, 'store']);
     });
 
-    Route::post('/logout', [AuthController::class, 'logout']);
-
-    /*
-    |--------------------------------------------------------------------------
-    | ARMADA
-    |--------------------------------------------------------------------------
-    */
-    Route::prefix('armadas')->group(function () {
-        Route::get('/', [ArmadaController::class, 'index']);
-        Route::post('/', [ArmadaController::class, 'store']);
-        Route::get('/{id}', [ArmadaController::class, 'show']);
-        Route::put('/{id}', [ArmadaController::class, 'update']);
-        Route::delete('/{id}', [ArmadaController::class, 'destroy']);
+    // ROLE
+    Route::prefix('roles')->group(function () {
+        Route::get('/', [RoleController::class, 'index']);
+        Route::post('/', [RoleController::class, 'store']);
+        Route::delete('/{id}', [RoleController::class, 'destroy']);
     });
 
+    // USERS
+    Route::prefix('users')->group(function () {
+        Route::get('/', [UserController::class, 'index']);
+        Route::post('/', [UserController::class, 'store']);
+
+        Route::post('/{id}/assign-role', [UserController::class, 'assignRole']);
+        Route::post('/{id}/remove-role', [UserController::class, 'removeRole']);
+    });
     /*
     |--------------------------------------------------------------------------
-    | ROUTES (JALUR)
+    | ROUTES (MASTER)
     |--------------------------------------------------------------------------
     */
     Route::prefix('routes')->group(function () {
@@ -67,7 +67,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     /*
     |--------------------------------------------------------------------------
-    | SERIES
+    | SERIES (MASTER JADWAL)
     |--------------------------------------------------------------------------
     */
     Route::prefix('series')->group(function () {
@@ -76,20 +76,48 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/{id}', [SeriesController::class, 'show']);
         Route::put('/{id}', [SeriesController::class, 'update']);
         Route::delete('/{id}', [SeriesController::class, 'destroy']);
+
+        // 🔁 toggle active
+        Route::patch('/{id}/toggle', [SeriesController::class, 'toggle']);
     });
 
     /*
     |--------------------------------------------------------------------------
-    | TRIPS (CORE 🔥)
+    | SCHEDULES (🔥 CORE SYSTEM)
+    |--------------------------------------------------------------------------
+    */
+    Route::prefix('schedules')->group(function () {
+        Route::post('/', [ScheduleController::class, 'store']);
+        Route::post('/bulk', [ScheduleController::class, 'bulkStore']);
+        Route::get('/by-date', [ScheduleController::class, 'byDate']);
+        Route::get('/{id}', [ScheduleController::class, 'show']);
+        Route::delete('/{id}', [ScheduleController::class, 'destroy']);
+    });
+
+    /*
+    |--------------------------------------------------------------------------
+    | TRIPS (OPERASIONAL)
     |--------------------------------------------------------------------------
     */
     Route::prefix('trips')->group(function () {
-        Route::get('/', [TripController::class, 'index']);
         Route::post('/', [TripController::class, 'store']);
-        Route::post('/bulk', [TripController::class, 'bulkStore']); // 🔥 multi create
-        Route::get('/{id}', [TripController::class, 'show']);
-        Route::put('/{id}', [TripController::class, 'update']);
+        Route::post('/bulk', [TripController::class, 'bulkStore']);
+        Route::get('/', [TripController::class, 'index']);
+        Route::patch('/{id}/status', [TripController::class, 'updateStatus']);
         Route::delete('/{id}', [TripController::class, 'destroy']);
+    });
+    /*
+    |--------------------------------------------------------------------------
+    | ARMADA (OPERASIONAL)
+    |--------------------------------------------------------------------------
+    */
+    Route::prefix('armada')->group(function () {
+        Route::post('/', [ArmadaController::class, 'store']);
+        Route::get('/', [ArmadaController::class, 'index']);
+        Route::get('/{id}', [ArmadaController::class, 'update']);
+        Route::delete('/{id}', [ArmadaController::class, 'destroy']);
     });
 
 });
+
+Route::get('/taek', [PublicTripController::class, 'index']);

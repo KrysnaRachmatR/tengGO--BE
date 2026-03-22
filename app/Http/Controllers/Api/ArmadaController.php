@@ -5,14 +5,17 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Armada;
-use Illuminate\Support\Facades\Storage;
 
 class ArmadaController extends Controller
 {
-    // 📋 GET ALL
-    public function index()
+    // 📋 GET ALL (by company)
+    public function index(Request $request)
     {
-        $data = Armada::latest()->get();
+        $user = $request->user();
+
+        $data = Armada::where('company_id', $user->company_id)
+                      ->latest()
+                      ->get();
 
         return response()->json([
             'success' => true,
@@ -20,23 +23,51 @@ class ArmadaController extends Controller
         ]);
     }
 
-   public function store(Request $request)
+    // ➕ CREATE
+    public function store(Request $request)
     {
         try {
+            $user = $request->user();
+
+            if (!$user || !$user->company_id) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Unauthorized'
+                ], 403);
+            }
+
             $validated = $request->validate([
-                'name' => 'required',
-                'plate_number' => 'required|unique:armadas,plate_number',
-                'seat_capacity' => 'required|integer',
-                'status' => 'required',
-                'company_id' => 'required',
+                'name' => 'required|string|max:255',
+                'plate_number' => 'required|string|max:50',
+                'seat_capacity' => 'required|integer|min:1',
+                'status' => 'required|in:active,maintenance',
             ]);
 
-            $armada = Armada::create($validated);
+            // 🔥 unique per company (bukan global)
+            $exists = Armada::where('company_id', $user->company_id)
+                            ->where('plate_number', $validated['plate_number'])
+                            ->exists();
+
+            if ($exists) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Plate number already exists in your company'
+                ], 422);
+            }
+
+            $armada = Armada::create([
+                'name' => $validated['name'],
+                'plate_number' => $validated['plate_number'],
+                'seat_capacity' => $validated['seat_capacity'],
+                'status' => $validated['status'],
+                'company_id' => $user->company_id
+            ]);
 
             return response()->json([
                 'success' => true,
                 'data' => $armada
             ]);
+
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -45,17 +76,42 @@ class ArmadaController extends Controller
         }
     }
 
+    // ✏️ UPDATE
     public function update(Request $request, $id)
     {
         try {
-            $armada = Armada::findOrFail($id);
+            $user = $request->user();
 
-            $armada->update($request->all());
+            $armada = Armada::where('company_id', $user->company_id)
+                            ->findOrFail($id);
+
+            $validated = $request->validate([
+                'name' => 'required|string|max:255',
+                'plate_number' => 'required|string|max:50',
+                'seat_capacity' => 'required|integer|min:1',
+                'status' => 'required|in:active,maintenance',
+            ]);
+
+            // cek plate_number unik (kecuali dirinya sendiri)
+            $exists = Armada::where('company_id', $user->company_id)
+                            ->where('plate_number', $validated['plate_number'])
+                            ->where('id', '!=', $id)
+                            ->exists();
+
+            if ($exists) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Plate number already exists in your company'
+                ], 422);
+            }
+
+            $armada->update($validated);
 
             return response()->json([
                 'success' => true,
                 'data' => $armada
             ]);
+
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -65,15 +121,21 @@ class ArmadaController extends Controller
     }
 
     // 🗑️ DELETE
-    public function destroy($id)
+    public function destroy(Request $request, $id)
     {
         try {
-            Armada::findOrFail($id)->delete();
+            $user = $request->user();
+
+            $armada = Armada::where('company_id', $user->company_id)
+                            ->findOrFail($id);
+
+            $armada->delete();
 
             return response()->json([
                 'success' => true,
                 'message' => 'Deleted'
             ]);
+
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,

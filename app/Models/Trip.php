@@ -7,23 +7,27 @@ use Illuminate\Database\Eloquent\Model;
 class Trip extends Model
 {
     protected $fillable = [
-        'route_id',
-        'series_id',
-        'armada_id',
-        'departure_date',
+        'company_id',
+        'schedule_id',
         'departure_time',
-        'company_id'
+        'armada_id',
+        'status'
     ];
 
-    // 🔗 Relasi
-    public function route()
+    /*
+    |--------------------------------------------------------------------------
+    | RELATIONS
+    |--------------------------------------------------------------------------
+    */
+
+    public function company()
     {
-        return $this->belongsTo(Route::class);
+        return $this->belongsTo(Company::class);
     }
 
-    public function series()
+    public function schedule()
     {
-        return $this->belongsTo(Series::class);
+        return $this->belongsTo(Schedule::class);
     }
 
     public function armada()
@@ -31,22 +35,38 @@ class Trip extends Model
         return $this->belongsTo(Armada::class);
     }
 
-    public function company()
+    public function prices()
     {
-        return $this->belongsTo(Company::class);
+        return $this->hasMany(TripPrice::class);
     }
 
-    // 🧠 Scope
-    public function scopeByCompany($query, $companyId)
+    public function seatTypes()
     {
-        return $query->where('company_id', $companyId);
+        return $this->belongsToMany(SeatType::class, 'trip_prices')
+            ->withPivot(['price', 'quota'])
+            ->withTimestamps();
     }
 
-    // 🔥 Helper (biar frontend enak)
-    public function getFullInfoAttribute()
+    public function seats()
     {
-        return $this->series->name . ' | ' .
-               $this->route->origin . ' - ' . $this->route->destination;
+        return $this->hasMany(TripSeat::class);
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | HELPER (PENTING BANGET BUAT API)
+    |--------------------------------------------------------------------------
+    */
+
+    // total quota dari semua seat type
+    public function getTotalQuotaAttribute()
+    {
+        return $this->prices->sum('quota');
+    }
+
+    // sisa kursi (sementara = quota, nanti dikurangi booking)
+    public function getAvailableSeatsAttribute()
+    {
+        return $this->prices->sum('quota');
+    }
 }

@@ -13,22 +13,14 @@ return new class extends Migration
     {
         Schema::create('trips', function (Blueprint $table) {
             $table->id();
-
-            $table->foreignId('route_id')->constrained()->cascadeOnDelete();
-            $table->foreignId('series_id')->constrained()->cascadeOnDelete();
+            $table->foreignId('company_id')->constrained()->cascadeOnDelete();
+            $table->foreignId('schedule_id')->constrained()->cascadeOnDelete();
             $table->foreignId('armada_id')->constrained()->cascadeOnDelete();
 
-            $table->date('departure_date');     // tanggal jalan
-            $table->time('departure_time')->nullable();
-
-            $table->decimal('price', 10, 2)->nullable(); // optional MVP
-
-            $table->foreignId('company_id')->constrained()->cascadeOnDelete();
+            $table->string('status')->default('ready'); 
+            // ready | on_trip | completed | cancelled
 
             $table->timestamps();
-
-            // 🚀 optimization
-            $table->index(['company_id', 'departure_date']);
         });
     }
 

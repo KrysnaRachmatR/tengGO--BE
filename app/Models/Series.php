@@ -7,8 +7,13 @@ use Illuminate\Database\Eloquent\Model;
 class Series extends Model
 {
     protected $fillable = [
+        'company_id',
+        'route_id',
         'name',
-        'company_id'
+        'departure_time',
+        'origin_point',
+        'destination_point',
+        'is_active'
     ];
 
     public function company()
@@ -16,20 +21,13 @@ class Series extends Model
         return $this->belongsTo(Company::class);
     }
 
-    public function trips()
+    public function route()
     {
-        return $this->hasMany(Trip::class);
+        return $this->belongsTo(Route::class);
     }
 
-    public function scopeByCompany($query, $companyId)
+    public function schedules()
     {
-        return $query->where('company_id', $companyId);
-    }
-
-    public function routes()
-    {
-        return $this->belongsToMany(Route::class, 'route_series')
-                    ->withPivot('is_active')
-                    ->withTimestamps();
+        return $this->hasMany(Schedule::class);
     }
 }
