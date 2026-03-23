@@ -3,197 +3,116 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use Illuminate\Http\Request;
-use App\Models\Series;
+use App\Http\Requests\Series\StoreSeriesRequest;
+use App\Http\Requests\Series\UpdateSeriesRequest;
+use App\Http\Resources\SeriesResource;
 use App\Models\Route;
+use App\Models\Series;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 class SeriesController extends Controller
 {
-    // ➕ CREATE
-    public function store(Request $request)
+    // GET /api/v1/routes/{route}/series
+    public function index(Request $request, int $routeId): JsonResponse
     {
-        try {
-            $user = $request->user();
+        $route = Route::findOrFail($routeId);
 
-            if (!$user || !$user->company_id) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Unauthorized'
-                ], 403);
-            }
-
-            $validated = $request->validate([
-                'route_id' => 'required|exists:routes,id',
-                'name' => 'required|string|max:255',
-                'departure_time' => 'required|date_format:H:i:s',
-                'origin_point' => 'required|string|max:255',
-                'destination_point' => 'required|string|max:255',
-            ]);
-
-            // 🔒 Pastikan route milik company yang sama
-            $route = Route::where('company_id', $user->company_id)
-                          ->findOrFail($validated['route_id']);
-
-            $series = Series::create([
-                'company_id' => $user->company_id,
-                'route_id' => $route->id,
-                'name' => $validated['name'],
-                'departure_time' => $validated['departure_time'],
-                'origin_point' => $validated['origin_point'],
-                'destination_point' => $validated['destination_point'],
-                'is_active' => true
-            ]);
-
-            return response()->json([
-                'success' => true,
-                'data' => $series
-            ]);
-
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => $e->getMessage()
-            ], 500);
-        }
-    }
-
-    // 📄 GET ALL (by company)
-    public function index(Request $request)
-    {
-        $user = $request->user();
-
-        $query = Series::with('route')
-            ->where('company_id', $user->company_id);
-
-        // optional filter
-        if ($request->has('route_id')) {
-            $query->where('route_id', $request->route_id);
-        }
-
-        if ($request->has('active')) {
-            $query->where('is_active', $request->active);
-        }
-
-        $data = $query->latest()->get();
+        $series = Series::where('route_id', $route->id)
+            ->when($request->has('is_active'), fn($q) => $q->where('is_active', $request->boolean('is_active')))
+            ->when($request->search, fn($q) => $q->where(function ($q) use ($request) {
+                $q->where('name', 'like', "%{$request->search}%")
+                  ->orWhere('code', 'like', "%{$request->search}%");
+            }))
+            ->with('route')
+            ->orderBy('departure_time')
+            ->paginate(15);
 
         return response()->json([
-            'success' => true,
-            'data' => $data
+            'status'  => 'success',
+            'message' => 'OK',
+            'data'    => [
+                'items' => SeriesResource::collection($series->items()),
+                'meta'  => [
+                    'current_page' => $series->currentPage(),
+                    'per_page'     => $series->perPage(),
+                    'total'        => $series->total(),
+                ],
+            ],
         ]);
     }
 
-    // 🔍 DETAIL
-    public function show(Request $request, $id)
+    // POST /api/v1/routes/{route}/series
+    public function store(StoreSeriesRequest $request, int $routeId): JsonResponse
     {
-        try {
-            $user = $request->user();
+        $route = Route::findOrFail($routeId);
 
-            $series = Series::with('route')
-                ->where('company_id', $user->company_id)
-                ->findOrFail($id);
+        // Pastikan route milik PO yang sama
+        abort_unless($route->po_id === $request->user()->po_id, 403, 'Akses ditolak.');
 
-            return response()->json([
-                'success' => true,
-                'data' => $series
-            ]);
+        $series = Series::create([
+            ...$request->validated(),
+            'route_id' => $route->id,
+        ]);
 
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => $e->getMessage()
-            ], 500);
-        }
+        return response()->json([
+            'status'  => 'success',
+            'message' => 'Seri berhasil ditambahkan.',
+            'data'    => new SeriesResource($series->load('route')),
+        ], 201);
     }
 
-    // ✏️ UPDATE
-    public function update(Request $request, $id)
+    // GET /api/v1/series/{series}
+    public function show(int $seriesId): JsonResponse
     {
-        try {
-            $user = $request->user();
+        $series = Series::with('route')->findOrFail($seriesId);
 
-            $series = Series::where('company_id', $user->company_id)
-                ->findOrFail($id);
-
-            $validated = $request->validate([
-                'route_id' => 'required|exists:routes,id',
-                'name' => 'required|string|max:255',
-                'departure_time' => 'required|date_format:H:i:s',
-                'origin_point' => 'required|string|max:255',
-                'destination_point' => 'required|string|max:255',
-            ]);
-
-            // 🔒 Validasi route milik company
-            $route = Route::where('company_id', $user->company_id)
-                ->findOrFail($validated['route_id']);
-
-            $series->update([
-                'route_id' => $route->id,
-                'name' => $validated['name'],
-                'departure_time' => $validated['departure_time'],
-                'origin_point' => $validated['origin_point'],
-                'destination_point' => $validated['destination_point'],
-            ]);
-
-            return response()->json([
-                'success' => true,
-                'data' => $series
-            ]);
-
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => $e->getMessage()
-            ], 500);
-        }
+        return response()->json([
+            'status'  => 'success',
+            'message' => 'OK',
+            'data'    => new SeriesResource($series),
+        ]);
     }
 
-    // 🔁 TOGGLE ACTIVE (lebih aman daripada delete)
-    public function toggle(Request $request, $id)
+    // PUT /api/v1/series/{series}
+    public function update(UpdateSeriesRequest $request, int $seriesId): JsonResponse
     {
-        try {
-            $user = $request->user();
+        $series = Series::findOrFail($seriesId);
+        $series->update($request->validated());
 
-            $series = Series::where('company_id', $user->company_id)
-                ->findOrFail($id);
-
-            $series->update([
-                'is_active' => !$series->is_active
-            ]);
-
-            return response()->json([
-                'success' => true,
-                'data' => $series
-            ]);
-
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => $e->getMessage()
-            ], 500);
-        }
+        return response()->json([
+            'status'  => 'success',
+            'message' => 'Seri berhasil diperbarui.',
+            'data'    => new SeriesResource($series->fresh('route')),
+        ]);
     }
 
-    // ❌ DELETE (optional, biasanya gak dipakai)
-    public function destroy(Request $request, $id)
+    // DELETE /api/v1/series/{series}
+    public function destroy(Request $request, int $seriesId): JsonResponse
     {
-        try {
-            $user = $request->user();
+        abort_unless($request->user()->isAdminPo(), 403, 'Akses ditolak.');
 
-            $series = Series::where('company_id', $user->company_id)
-                ->findOrFail($id);
+        $series = Series::findOrFail($seriesId);
 
-            $series->delete();
+        // Tidak bisa hapus seri yang punya trip yang belum selesai
+        $hasActiveTripS = $series->trips()
+            ->whereIn('status', ['scheduled', 'running'])
+            ->exists();
 
+        if ($hasActiveTripS) {
             return response()->json([
-                'success' => true,
-                'message' => 'Deleted'
-            ]);
-
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => $e->getMessage()
-            ], 500);
+                'status'  => 'error',
+                'message' => 'Seri tidak bisa dihapus karena masih memiliki trip yang berjalan.',
+                'data'    => null,
+            ], 422);
         }
+
+        $series->delete();
+
+        return response()->json([
+            'status'  => 'success',
+            'message' => 'Seri berhasil dihapus.',
+            'data'    => null,
+        ]);
     }
 }

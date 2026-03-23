@@ -3,139 +3,113 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use Illuminate\Http\Request;
+use App\Http\Requests\User\StoreUserRequest;
+use App\Http\Requests\User\UpdateUserRequest;
+use App\Http\Resources\UserResource;
 use App\Models\User;
-use App\Models\Role;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 class UserController extends Controller
 {
-    // ➕ CREATE USER
-    public function store(Request $request)
+    // GET /api/v1/po/users
+    public function index(Request $request): JsonResponse
     {
-        try {
-            $auth = $request->user();
+        abort_unless($request->user()->isAdminPo(), 403, 'Akses ditolak.');
 
-            // ❗ hanya admin atau super admin
-            if (!$auth->is_super_admin && !$auth->hasRole('admin')) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Unauthorized'
-                ], 403);
-            }
-
-            $validated = $request->validate([
-                'name' => 'required|string|max:255',
-                'email' => 'required|email|unique:users,email',
-                'password' => 'required|min:6',
-            ]);
-
-            // 🔥 kalau super admin → wajib kirim company_id
-            $companyId = $auth->is_super_admin
-                ? $request->company_id
-                : $auth->company_id;
-
-            if ($auth->is_super_admin && !$companyId) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'company_id required for super admin'
-                ], 422);
-            }
-
-            $user = User::create([
-                'name' => $validated['name'],
-                'email' => $validated['email'],
-                'password' => $validated['password'],
-                'company_id' => $companyId,
-                'is_super_admin' => false
-            ]);
-
-            return response()->json([
-                'success' => true,
-                'data' => $user
-            ]);
-
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => $e->getMessage()
-            ], 500);
-        }
-    }
-
-    // 📄 GET USERS
-    public function index(Request $request)
-    {
-        $user = $request->user();
-
-        $data = User::with('roles')
-            ->where('company_id', $user->company_id)
-            ->get();
+        $users = User::query()
+                     ->when($request->role, fn($q) => $q->role($request->role))
+                     ->when($request->search, fn($q) => $q->where(function ($q) use ($request) {
+                         $q->where('name', 'like', "%{$request->search}%")
+                           ->orWhere('email', 'like', "%{$request->search}%");
+                     }))
+                     ->when($request->has('is_active'), fn($q) => $q->where('is_active', $request->boolean('is_active')))
+                     ->orderBy('name')
+                     ->paginate(15);
 
         return response()->json([
-            'success' => true,
-            'data' => $data
+            'status'  => 'success',
+            'message' => 'OK',
+            'data'    => [
+                'items' => UserResource::collection($users->items()),
+                'meta'  => [
+                    'current_page' => $users->currentPage(),
+                    'per_page'     => $users->perPage(),
+                    'total'        => $users->total(),
+                ],
+            ],
         ]);
     }
 
-    // 🔥 ASSIGN ROLE
-    public function assignRole(Request $request, $id)
+    // POST /api/v1/po/users
+    public function store(StoreUserRequest $request): JsonResponse
     {
-        try {
-            $auth = $request->user();
+        $user = User::create([
+            ...$request->validated(),
+            'po_id' => $request->user()->po_id, // auto inject po_id dari admin yang login
+        ]);
 
-            $validated = $request->validate([
-                'role_id' => 'required|exists:roles,id',
-            ]);
-
-            $user = User::where('company_id', $auth->company_id)
-                ->findOrFail($id);
-
-            $role = Role::where('company_id', $auth->company_id)
-                ->findOrFail($validated['role_id']);
-
-            // prevent duplicate
-            if (!$user->roles()->where('role_id', $role->id)->exists()) {
-                $user->roles()->attach($role->id);
-            }
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Role assigned'
-            ]);
-
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => $e->getMessage()
-            ], 500);
-        }
+        return response()->json([
+            'status'  => 'success',
+            'message' => 'User berhasil ditambahkan.',
+            'data'    => new UserResource($user->load('po')),
+        ], 201);
     }
 
-    // ❌ REMOVE ROLE
-    public function removeRole(Request $request, $id)
+    // GET /api/v1/po/users/{user}
+    public function show(Request $request, int $userId): JsonResponse
     {
-        try {
-            $auth = $request->user();
+        abort_unless($request->user()->isAdminPo(), 403, 'Akses ditolak.');
 
-            $validated = $request->validate([
-                'role_id' => 'required|exists:roles,id',
-            ]);
+        // Global scope BelongsToTenant sudah menjamin user yang diakses
+        // hanya milik PO yang sama
+        $user = User::findOrFail($userId);
 
-            $user = User::where('company_id', $auth->company_id)
-                ->findOrFail($id);
+        return response()->json([
+            'status'  => 'success',
+            'message' => 'OK',
+            'data'    => new UserResource($user->load('po')),
+        ]);
+    }
 
-            $user->roles()->detach($validated['role_id']);
+    // PUT /api/v1/po/users/{user}
+    public function update(UpdateUserRequest $request, int $userId): JsonResponse
+    {
+        $user = User::findOrFail($userId);
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Role removed'
-            ]);
+        // Admin PO tidak boleh edit dirinya sendiri lewat endpoint ini
+        abort_if($user->id === $request->user()->id, 422, 'Gunakan endpoint /auth/me untuk mengubah data diri sendiri.');
 
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => $e->getMessage()
-            ], 500);
-        }
+        // Admin PO tidak boleh edit user dengan role di atasnya
+        abort_if($user->isSuperAdmin() || $user->isAdminPo(), 403, 'Tidak bisa mengubah data user dengan role ini.');
+
+        $user->update($request->validated());
+
+        return response()->json([
+            'status'  => 'success',
+            'message' => 'User berhasil diperbarui.',
+            'data'    => new UserResource($user->fresh('po')),
+        ]);
+    }
+
+    // DELETE /api/v1/po/users/{user}
+    public function destroy(Request $request, int $userId): JsonResponse
+    {
+        abort_unless($request->user()->isAdminPo(), 403, 'Akses ditolak.');
+
+        $user = User::findOrFail($userId);
+
+        abort_if($user->id === $request->user()->id, 422, 'Tidak bisa menghapus akun sendiri.');
+        abort_if($user->isSuperAdmin() || $user->isAdminPo(), 403, 'Tidak bisa menghapus user dengan role ini.');
+
+        // Revoke semua token sebelum hapus
+        $user->tokens()->delete();
+        $user->delete();
+
+        return response()->json([
+            'status'  => 'success',
+            'message' => 'User berhasil dihapus.',
+            'data'    => null,
+        ]);
     }
 }

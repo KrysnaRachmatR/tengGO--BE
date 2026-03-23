@@ -6,34 +6,31 @@ use App\Traits\BelongsToTenant;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-class Crew extends Model
+class Fleet extends Model
 {
     use SoftDeletes, BelongsToTenant;
 
     protected $fillable = [
         'po_id',
         'name',
-        'nik',
-        'phone',
-        'role',
-        'license_number',
-        'license_expiry',
+        'license_plate',
+        'brand',
+        'model',
+        'year',
+        'total_seats',
+        'facilities',
         'is_active',
         'notes',
     ];
 
     protected $casts = [
-        'license_expiry' => 'date',
-        'is_active'      => 'boolean',
+        'facilities'  => 'array',
+        'is_active'   => 'boolean',
+        'total_seats' => 'integer',
+        'year'        => 'integer',
     ];
-
-    const ROLE_DRIVER    = 'driver';
-    const ROLE_CO_DRIVER = 'co_driver';
-    const ROLE_CONDUCTOR = 'conductor';
-    const ROLE_GUIDE     = 'guide';
 
     // -------------------------------------------------------------------------
     // Relations
@@ -44,16 +41,14 @@ class Crew extends Model
         return $this->belongsTo(Po::class, 'po_id');
     }
 
-    public function tripCrews(): HasMany
+    public function seats(): HasMany
     {
-        return $this->hasMany(TripCrew::class, 'crew_id');
+        return $this->hasMany(FleetSeat::class, 'fleet_id')->orderBy('sort_order');
     }
 
-    public function trips(): BelongsToMany
+    public function trips(): HasMany
     {
-        return $this->belongsToMany(Trip::class, 'trip_crews', 'crew_id', 'trip_id')
-                    ->withPivot(['role', 'is_primary', 'notes'])
-                    ->withTimestamps();
+        return $this->hasMany(Trip::class, 'fleet_id');
     }
 
     // -------------------------------------------------------------------------
@@ -65,24 +60,20 @@ class Crew extends Model
         return $query->where('is_active', true);
     }
 
-    public function scopeRole($query, string $role)
-    {
-        return $query->where('role', $role);
-    }
-
     // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
 
-    public function isLicenseExpired(): bool
+    // Recalculate & update total_seats dari sum fleet_seats
+    public function syncTotalSeats(): void
     {
-        return $this->license_expiry && $this->license_expiry->isPast();
+        $this->update([
+            'total_seats' => $this->seats()->sum('total'),
+        ]);
     }
 
-    public function isLicenseExpiringSoon(int $days = 30): bool
+    public function hasFacility(string $facility): bool
     {
-        return $this->license_expiry &&
-               $this->license_expiry->isFuture() &&
-               $this->license_expiry->diffInDays(now()) <= $days;
+        return in_array($facility, $this->facilities ?? []);
     }
 }

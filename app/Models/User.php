@@ -2,20 +2,24 @@
 
 namespace App\Models;
 
+use App\Traits\BelongsToTenant;
+use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Foundation\Auth\User as Authenticatable;
-use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 
 class User extends Authenticatable
 {
-    use HasApiTokens, Notifiable;
+    use HasApiTokens, SoftDeletes, BelongsToTenant;
 
     protected $fillable = [
+        'po_id',
         'name',
         'email',
         'password',
-        'company_id',
-        'is_super_admin',
+        'role',
+        'phone',
+        'is_active',
     ];
 
     protected $hidden = [
@@ -24,38 +28,82 @@ class User extends Authenticatable
     ];
 
     protected $casts = [
-        'is_super_admin' => 'boolean',
+        'email_verified_at' => 'datetime',
+        'password'          => 'hashed',
+        'is_active'         => 'boolean',
     ];
 
-    // 🔗 Relasi
-    public function company()
+    // -------------------------------------------------------------------------
+    // Role constants — pakai konstanta biar tidak typo di seluruh codebase
+    // -------------------------------------------------------------------------
+
+    const ROLE_SUPER_ADMIN  = 'super_admin';
+    const ROLE_ADMIN_PO     = 'admin_po';
+    const ROLE_OPERASIONAL  = 'operasional';
+    const ROLE_STAFF        = 'staff';
+
+    const ROLES = [
+        self::ROLE_SUPER_ADMIN,
+        self::ROLE_ADMIN_PO,
+        self::ROLE_OPERASIONAL,
+        self::ROLE_STAFF,
+    ];
+
+    // -------------------------------------------------------------------------
+    // Role helpers
+    // -------------------------------------------------------------------------
+
+    public function isSuperAdmin(): bool
     {
-        return $this->belongsTo(Company::class);
+        return $this->role === self::ROLE_SUPER_ADMIN;
     }
 
-    public function roles()
+    public function isAdminPo(): bool
     {
-        return $this->belongsToMany(Role::class, 'user_roles');
+        return $this->role === self::ROLE_ADMIN_PO;
     }
 
-    // 🧠 Helper: cek role
-    public function hasRole($roleName)
+    public function isOperasional(): bool
     {
-        if ($this->is_super_admin) {
-            return true;
-        }
-
-        return $this->roles()->where('name', $roleName)->exists();
+        return $this->role === self::ROLE_OPERASIONAL;
     }
 
-    // 🧠 Helper: assign role
-    public function assignRole($roleId)
+    public function isStaff(): bool
     {
-        return $this->roles()->attach($roleId);
+        return $this->role === self::ROLE_STAFF;
     }
 
-    public function setPasswordAttribute($value)
+    // Super admin tidak terikat PO manapun
+    public function belongsToPo(): bool
     {
-        $this->attributes['password'] = bcrypt($value);
+        return $this->po_id !== null;
+    }
+
+    // -------------------------------------------------------------------------
+    // Relations
+    // -------------------------------------------------------------------------
+
+    public function po(): BelongsTo
+    {
+        return $this->belongsTo(Po::class, 'po_id');
+    }
+
+    // -------------------------------------------------------------------------
+    // Scopes
+    // -------------------------------------------------------------------------
+
+    public function scopeActive($query)
+    {
+        return $query->where('is_active', true);
+    }
+
+    public function scopeRole($query, string|array $role)
+    {
+        return $query->whereIn('role', (array) $role);
+    }
+
+    public function scopeOfPo($query, int $poId)
+    {
+        return $query->where('po_id', $poId);
     }
 }

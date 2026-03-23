@@ -4,35 +4,25 @@ namespace App\Models;
 
 use App\Traits\BelongsToTenant;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\HasMany;
 
-class Route extends Model
+class SeriesSchedule extends Model
 {
-    use SoftDeletes, BelongsToTenant;
+    use BelongsToTenant;
 
     protected $fillable = [
         'po_id',
-        'origin',
-        'destination',
-        'name',
+        'series_id',
+        'date',
         'is_active',
+        'reason',
+        'created_by',
     ];
 
     protected $casts = [
+        'date'      => 'date',
         'is_active' => 'boolean',
     ];
-
-    // -------------------------------------------------------------------------
-    // Accessors
-    // -------------------------------------------------------------------------
-
-    // Kalau name tidak diisi, generate otomatis dari origin - destination
-    public function getDisplayNameAttribute(): string
-    {
-        return $this->name ?? strtoupper("{$this->origin} - {$this->destination}");
-    }
 
     // -------------------------------------------------------------------------
     // Relations
@@ -43,14 +33,14 @@ class Route extends Model
         return $this->belongsTo(Po::class, 'po_id');
     }
 
-    public function series(): HasMany
+    public function series(): BelongsTo
     {
-        return $this->hasMany(Series::class, 'route_id');
+        return $this->belongsTo(Series::class, 'series_id');
     }
 
-    public function activeSeries(): HasMany
+    public function createdBy(): BelongsTo
     {
-        return $this->hasMany(Series::class, 'route_id')->where('is_active', true);
+        return $this->belongsTo(User::class, 'created_by');
     }
 
     // -------------------------------------------------------------------------
@@ -60,5 +50,22 @@ class Route extends Model
     public function scopeActive($query)
     {
         return $query->where('is_active', true);
+    }
+
+    public function scopeInactive($query)
+    {
+        return $query->where('is_active', false);
+    }
+
+    public function scopeOnDate($query, string $date)
+    {
+        return $query->where('date', $date);
+    }
+
+    public function scopeInMonth($query, string $yearMonth)
+    {
+        // $yearMonth format: "2025-01"
+        return $query->whereYear('date', substr($yearMonth, 0, 4))
+                     ->whereMonth('date', substr($yearMonth, 5, 2));
     }
 }

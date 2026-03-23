@@ -12,9 +12,33 @@ return Application::configure(basePath: dirname(__DIR__))
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
     )
+
     ->withMiddleware(function (Middleware $middleware) {
-        $middleware->prepend(HandleCors::class); // ← tambah ini
+
+        /*
+        |--------------------------------------------------------------------------
+        | Global Middleware
+        |--------------------------------------------------------------------------
+        */
+
+        // CORS → penting untuk API access (NextJS / client)
+        $middleware->append(HandleCors::class);
+
+        /*
+        |--------------------------------------------------------------------------
+        | API Middleware Group
+        |--------------------------------------------------------------------------
+        */
+
+        $middleware->api(prepend: [
+            // Uncomment kalau nanti pakai SPA + cookie auth
+            // \Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful::class,
+        ]);
+
     })
+
     ->withExceptions(function (Exceptions $exceptions) {
         //
-    })->create();
+    })
+
+    ->create();

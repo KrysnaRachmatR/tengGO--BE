@@ -8,29 +8,28 @@ use Symfony\Component\HttpFoundation\Response;
 
 class RoleMiddleware
 {
-    /**
-     * Handle an incoming request.
-     *
-     * @param  Closure(Request): (Response)  $next
-     */
-    public function handle($request, Closure $next, ...$roles)
+    public function handle(Request $request, Closure $next, ...$roles): Response
     {
         $user = $request->user();
 
-        if ($user->is_super_admin) {
+        if (! $user) {
+            return response()->json([
+                'message' => 'Unauthenticated'
+            ], 401);
+        }
+
+        // Super admin bypass
+        if ($user->isSuperAdmin()) {
             return $next($request);
         }
 
-        $userRoles = $user->roles->pluck('name')->toArray();
-
-        foreach ($roles as $role) {
-            if (in_array($role, $userRoles)) {
-                return $next($request);
-            }
+        // Cek role
+        if (! $user->hasRole($roles)) {
+            return response()->json([
+                'message' => 'Unauthorized'
+            ], 403);
         }
 
-        return response()->json([
-            'message' => 'Unauthorized'
-        ], 403);
+        return $next($request);
     }
 }
