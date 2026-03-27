@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\RouteController;
 use App\Http\Controllers\Api\SeriesController;
 use App\Http\Controllers\Api\SeriesScheduleController;
 use App\Http\Controllers\Api\UserController;
+use App\Http\Controllers\Api\TripController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -102,14 +103,14 @@ Route::prefix('v1')->group(function () {
         // -------------------------------------------------------------------------
         // Trip Harian — akan dibuat di iterasi berikutnya
         // -------------------------------------------------------------------------
-        // Route::get('trips',                        [TripController::class, 'index']);
-        // Route::post('trips',                       [TripController::class, 'store']);
-        // Route::post('trips/generate',              [TripController::class, 'generate']);
-        // Route::get('trips/{trip}',                 [TripController::class, 'show']);
-        // Route::put('trips/{trip}',                 [TripController::class, 'update']);
-        // Route::patch('trips/{trip}/status',        [TripController::class, 'updateStatus']);
-        // Route::delete('trips/{trip}',              [TripController::class, 'destroy']);
-        // Route::post('trips/{trip}/crews',          [TripController::class, 'assignCrew']);
-        // Route::delete('trips/{trip}/crews/{crew}', [TripController::class, 'removeCrew']);
+        Route::get('trips',                        [TripController::class, 'index']);
+        Route::post('trips',                       [TripController::class, 'store']);
+        Route::post('trips/generate',              [TripController::class, 'generate']);
+        Route::get('trips/{trip}',                 [TripController::class, 'show']);
+        Route::put('trips/{trip}',                 [TripController::class, 'update']);
+        Route::patch('trips/{trip}/status',        [TripController::class, 'updateStatus']);
+        Route::delete('trips/{trip}',              [TripController::class, 'destroy']);
+        Route::post('trips/{trip}/crews',          [TripController::class, 'assignCrew']);
+        Route::delete('trips/{trip}/crews/{crew}', [TripController::class, 'removeCrew']);
     });
 });

@@ -22,8 +22,8 @@ class StoreCrewRequest extends FormRequest
             'role'           => ['required', Rule::in([
                 Crew::ROLE_DRIVER,
                 Crew::ROLE_CO_DRIVER,
-                Crew::ROLE_CONDUCTOR,
-                Crew::ROLE_GUIDE,
+                Crew::ROLE_PRAMUGARARI,
+                Crew::ROLE_HELPER,
             ])],
             'license_number' => ['nullable', 'string', 'max:30'],
             'license_expiry' => ['nullable', 'date', 'date_format:Y-m-d'],

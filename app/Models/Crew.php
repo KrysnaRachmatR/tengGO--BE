@@ -32,8 +32,8 @@ class Crew extends Model
 
     const ROLE_DRIVER    = 'driver';
     const ROLE_CO_DRIVER = 'co_driver';
-    const ROLE_CONDUCTOR = 'conductor';
-    const ROLE_GUIDE     = 'guide';
+    const ROLE_PRAMUGARARI = 'pramugara/ri';
+    const ROLE_HELPER     = 'helper';
 
     // -------------------------------------------------------------------------
     // Relations
